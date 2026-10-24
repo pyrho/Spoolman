@@ -229,15 +229,16 @@
 						ontransform={(e) => textTransform(e.target)}
 						ontransformend={(e) => commitTransform(el, e.target)}
 					>
-						{#if spec.bg}
-							<Rect
-								x={0}
-								y={0}
-								width={Number(spec.config.width)}
-								height={spec.bg.height}
-								fill={spec.bg.fill}
-							/>
-						{/if}
+						<!-- Always mounted (hidden when unused): svelte-konva appends a node that
+						     mounts later on top, so toggling the background on would cover the text. -->
+						<Rect
+							x={0}
+							y={0}
+							width={Number(spec.config.width)}
+							height={spec.bg?.height ?? 0}
+							fill={spec.bg?.fill}
+							visible={!!spec.bg}
+						/>
 						<Text {...spec.config} />
 					</Group>
 				{:else if spec.kind === 'image'}
@@ -281,9 +282,14 @@
 						ontransform={(e) => textTransform(e.target)}
 						ontransformend={(e) => commitTransform(el, e.target)}
 					>
-						{#if spec.bg}
-							<Rect x={0} y={0} width={spec.width} height={spec.bg.height} fill={spec.bg.fill} />
-						{/if}
+						<Rect
+							x={0}
+							y={0}
+							width={spec.width}
+							height={spec.bg?.height ?? 0}
+							fill={spec.bg?.fill}
+							visible={!!spec.bg}
+						/>
 						<Text {...spec.config} />
 					</Group>
 				{:else}
