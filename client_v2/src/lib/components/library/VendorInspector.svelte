@@ -11,6 +11,7 @@
 	import NumberInput from '../NumberInput.svelte';
 	import SectionLabel from '../SectionLabel.svelte';
 	import ExtraFieldsSection from '../ExtraFieldsSection.svelte';
+	import VendorLogoField from './VendorLogoField.svelte';
 	import FieldGrid from '../FieldGrid.svelte';
 	import Field from '../Field.svelte';
 	import type { Filament, Vendor } from '$lib/types';
@@ -188,6 +189,9 @@
 				<Field label={m['vendor.fields.registered']()}>{vendor.registeredLabel}</Field>
 				<Field label={m['vendor.fields.comment']()}>
 					<EditableField value={vendor.comment} linkify oninput={(v) => set({ comment: v })} />
+				</Field>
+				<Field label={m['vendor.fields.logo']()} help={m['vendor.fieldsHelp.logo']()}>
+					<VendorLogoField vendorId={vendor.id} />
 				</Field>
 			</FieldGrid>
 

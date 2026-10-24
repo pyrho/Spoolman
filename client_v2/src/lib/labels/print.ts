@@ -1,8 +1,10 @@
 import Konva from 'konva';
 import { labelKind, type LabelDesign, type PrintLayout } from './types';
 import type { LabelBinding } from './template';
-import { elementToShape, qrLogoBox } from './render';
+import { elementToShape, imageSource, qrLogoBox, type TextBg } from './render';
 import { getLogoImage } from './logo';
+import { loadImages } from './images';
+import { vendorLogos } from '$lib/stores/vendorLogos.svelte';
 import { layoutMargin, paperSize, sheetGrid, pxPerMmForDpi } from './paper';
 import { resolveExportFormat, type ExportedFile, type RenderedLabel } from './export';
 
@@ -26,14 +28,55 @@ export function resolveDpi(layout: Pick<PrintLayout, 'dpi'>): number {
 	return Math.min(MAX_DPI, Math.max(MIN_DPI, Math.round(dpi)));
 }
 
+/** Images a label render needs, loaded up front because rasterizing is synchronous. */
+export interface LabelAssets {
+	/** The Spoolman logo for QR centres. */
+	logo: HTMLImageElement | null;
+	/** Image-element sources (vendor logos) → decoded images. */
+	images: Map<string, HTMLImageElement>;
+}
+
+/** Load everything rendering `design` for these bindings will draw. */
+export async function loadLabelAssets(design: LabelDesign, bindings: LabelBinding[]): Promise<LabelAssets> {
+	if (design.elements.some((el) => el.type === 'image')) await vendorLogos.ensure();
+	const srcs: string[] = [];
+	for (const el of design.elements) {
+		if (el.type !== 'image') continue;
+		for (const b of bindings) {
+			const src = imageSource(el, b);
+			if (src) srcs.push(src);
+		}
+	}
+	const [logo, images] = await Promise.all([getLogoImage().catch(() => null), loadImages(srcs)]);
+	return { logo, images };
+}
+
+/** A text block's group: the optional background bar under the text itself. */
+function textGroup(
+	x: number,
+	y: number,
+	bg: TextBg | undefined,
+	config: Record<string, unknown>,
+	clip?: { width: number; height: number }
+) {
+	const group = new Konva.Group(
+		clip ? { x, y, clipX: 0, clipY: 0, clipWidth: clip.width, clipHeight: clip.height } : { x, y }
+	);
+	if (bg)
+		group.add(new Konva.Rect({ x: 0, y: 0, width: Number(config.width), height: bg.height, fill: bg.fill }));
+	group.add(new Konva.Text(config));
+	return group;
+}
+
 /** Rasterize one label (bound to a spool) to a PNG data URL at the given DPI. */
 export function renderLabelDataUrl(
 	design: LabelDesign,
 	binding: LabelBinding,
 	baseUrl: string,
-	logoImage: HTMLImageElement | null,
+	assets: LabelAssets,
 	dpi: number = DEFAULT_DPI
 ): string {
+	const logoImage = assets.logo;
 	const pxPerMm = pxPerMmForDpi(dpi);
 	const width = design.label.w * pxPerMm;
 	const height = design.label.h * pxPerMm;
@@ -49,7 +92,7 @@ export function renderLabelDataUrl(
 
 	const kind = labelKind(design);
 	for (const el of design.elements) {
-		const spec = elementToShape(el, { binding, baseUrl, kind });
+		const spec = elementToShape(el, { binding, baseUrl, kind, images: assets.images });
 		if (spec.kind === 'qr') {
 			const group = new Konva.Group({ x: spec.x, y: spec.y });
 			group.add(new Konva.Rect({ x: 0, y: 0, width: spec.size, height: spec.size, fill: '#ffffff' }));
@@ -71,17 +114,19 @@ export function renderLabelDataUrl(
 			}
 			layer.add(group);
 		} else if (spec.kind === 'text') {
-			layer.add(new Konva.Text(spec.config));
+			layer.add(textGroup(spec.x, spec.y, spec.bg, spec.config));
 		} else if (spec.kind === 'textclip') {
-			const group = new Konva.Group({
-				x: spec.x,
-				y: spec.y,
-				clipX: 0,
-				clipY: 0,
-				clipWidth: spec.width,
-				clipHeight: spec.clipHeight
-			});
-			group.add(new Konva.Text(spec.config));
+			layer.add(
+				textGroup(spec.x, spec.y, spec.bg, spec.config, { width: spec.width, height: spec.clipHeight })
+			);
+		} else if (spec.kind === 'image') {
+			const group = new Konva.Group({ x: spec.x, y: spec.y });
+			if (spec.image) {
+				const { img, ...box } = spec.image;
+				group.add(new Konva.Image({ image: img, ...box }));
+			} else if (spec.text) {
+				group.add(new Konva.Text(spec.text));
+			}
 			layer.add(group);
 		} else {
 			layer.add(new Konva.Rect(spec.config));
@@ -125,10 +170,10 @@ interface PrintJob {
  * exact-size page per label.
  */
 export async function printLabels({ design, bindings, layout, baseUrl }: PrintJob): Promise<void> {
-	const logoImage = await getLogoImage().catch(() => null);
+	const assets = await loadLabelAssets(design, bindings);
 	// One raster per spool, reused across copies.
 	const dpi = resolveDpi(layout);
-	const urls = bindings.map((b) => renderLabelDataUrl(design, b, baseUrl, logoImage, dpi));
+	const urls = bindings.map((b) => renderLabelDataUrl(design, b, baseUrl, assets, dpi));
 	const items: (string | null)[] = [];
 	for (const url of urls) for (let c = 0; c < Math.max(1, layout.copies); c++) items.push(url);
 
@@ -201,7 +246,7 @@ function downloadBytes(bytes: Uint8Array, name: string, mimeType: string) {
  */
 export async function exportLabels({ design, bindings, layout, baseUrl }: PrintJob): Promise<void> {
 	if (bindings.length === 0) return;
-	const logoImage = await getLogoImage().catch(() => null);
+	const assets = await loadLabelAssets(design, bindings);
 	const dpi = resolveDpi(layout);
 	const kind = labelKind(design);
 	const format = resolveExportFormat(layout.exportFormat);
@@ -210,7 +255,7 @@ export async function exportLabels({ design, bindings, layout, baseUrl }: PrintJ
 	const files: ExportedFile[] = [];
 	for (const b of bindings) {
 		const name = `spoolman-${kind}-label-${kind === 'filament' ? b.filament?.id : b.spool?.id}`;
-		const dataUrl = renderLabelDataUrl(design, b, baseUrl, logoImage, dpi);
+		const dataUrl = renderLabelDataUrl(design, b, baseUrl, assets, dpi);
 		const rendered: RenderedLabel = {
 			name,
 			dataUrl,

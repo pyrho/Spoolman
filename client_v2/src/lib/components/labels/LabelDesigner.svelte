@@ -2,7 +2,7 @@
 	import LabelCanvas from './LabelCanvas.svelte';
 	import ElementInspector from './ElementInspector.svelte';
 	import NumberInput from '../NumberInput.svelte';
-	import { labelKind, type LabelDesign, type LabelElement } from '$lib/labels/types';
+	import { DEFAULT_LOGO_SOURCE, labelKind, type LabelDesign, type LabelElement } from '$lib/labels/types';
 	import { getPlaceholderGroups, type LabelBinding } from '$lib/labels/template';
 	import { fields } from '$lib/stores/fields.svelte';
 	import { settings } from '$lib/stores/settings.svelte';
@@ -14,6 +14,8 @@
 	import Type from '@lucide/svelte/icons/type';
 	import SwatchBook from '@lucide/svelte/icons/swatch-book';
 	import RectangleHorizontal from '@lucide/svelte/icons/rectangle-horizontal';
+	import ImageIcon from '@lucide/svelte/icons/image';
+	import Tag from '@lucide/svelte/icons/tag';
 
 	interface Props {
 		design: LabelDesign;
@@ -142,6 +144,38 @@
 			template: m['labels.newText']()
 		});
 	}
+	// White bold text on a full-width black bar — the material "badge".
+	function addBadge() {
+		add({
+			id: uid(),
+			type: 'text',
+			x: 2,
+			y: 2,
+			w: clampW(design.label.w - 4),
+			fontSize: 3,
+			bold: true,
+			align: 'left',
+			color: '#ffffff',
+			wrap: false,
+			template: '{filament.material}',
+			bg: '#000000',
+			pad: 0.6
+		});
+	}
+	function addLogo() {
+		add({
+			id: uid(),
+			type: 'image',
+			x: 2,
+			y: 2,
+			w: clampW(design.label.w - 4),
+			h: clampH(6),
+			source: DEFAULT_LOGO_SOURCE,
+			fallback: '{vendor.name}',
+			align: 'left',
+			color: '#000000'
+		});
+	}
 	function addSwatch() {
 		add({ id: uid(), type: 'swatch', x: 2, y: 2, w: clampW(20), h: clampH(6), radius: 1 });
 	}
@@ -178,6 +212,8 @@
 		<div class="p-head">{m['labels.addHead']()}</div>
 		<button onclick={addQr}><QrCode size={15} /> {m['labels.addQr']()}</button>
 		<button onclick={addText}><Type size={15} /> {m['labels.addText']()}</button>
+		<button onclick={addBadge}><Tag size={15} /> {m['labels.addBadge']()}</button>
+		<button onclick={addLogo}><ImageIcon size={15} /> {m['labels.addLogo']()}</button>
 		<button onclick={addSwatch}><SwatchBook size={15} /> {m['labels.addSwatch']()}</button>
 		<button onclick={addRect}><RectangleHorizontal size={15} /> {m['labels.addRect']()}</button>
 

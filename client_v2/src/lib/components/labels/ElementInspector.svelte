@@ -20,7 +20,8 @@
 		qr: m['labels.kind.qr'],
 		rect: m['labels.kind.rect'],
 		swatch: m['labels.kind.swatch'],
-		text: m['labels.kind.text']
+		text: m['labels.kind.text'],
+		image: m['labels.kind.image']
 	};
 
 	// Emit an updated element with a shallow patch applied.
@@ -29,6 +30,7 @@
 	}
 	function insertField(token: string) {
 		if (el?.type === 'text') update({ template: `${el.template}{${token}}` });
+		else if (el?.type === 'image') update({ fallback: `${el.fallback}{${token}}` });
 	}
 	// Switching a QR element to a custom URL: seed the template from the URL form
 	// so the user has a working `{id}` link to edit instead of a blank field.
@@ -179,6 +181,39 @@
 			{#if el.wrap === false}
 				<p class="hint">{m['labels.hintNowrap']()}</p>
 			{/if}
+			<div class="row2">
+				<label class="check"
+					><input
+						type="checkbox"
+						checked={!!el.bg}
+						onchange={(e) =>
+							update(e.currentTarget.checked ? { bg: '#000000', pad: el.pad ?? 0.6 } : { bg: '' })}
+					/>
+					{m['labels.background']()}</label
+				>
+				{#if el.bg}
+					<label class="color-row"
+						>{m['labels.fill']()}
+						<input
+							type="color"
+							value={el.bg}
+							onchange={(e) => update({ bg: e.currentTarget.value })}
+						/></label
+					>
+				{/if}
+			</div>
+			{#if el.bg}
+				<label
+					>{m['labels.paddingMm']()}<NumberInput
+						dense
+						unit="mm"
+						step={0.1}
+						min={0}
+						value={el.pad ?? 0}
+						onchange={(v) => update({ pad: v })}
+					/></label
+				>
+			{/if}
 			<label
 				>{m['labels.textTemplate']()}
 				<textarea rows="3" value={el.template} onchange={(e) => update({ template: e.currentTarget.value })}
@@ -204,6 +239,80 @@
 				</select>
 			</label>
 			<p class="hint">{m['labels.hintWrap']()} <code>{'{Temp: {filament.nozzleTemp}°C}'}</code></p>
+		{:else if el.type === 'image'}
+			<div class="row2">
+				<label
+					>{m['labels.widthMm']()}<NumberInput
+						dense
+						unit="mm"
+						step={0.5}
+						min={2}
+						value={el.w}
+						onchange={(v) => update({ w: v })}
+					/></label
+				>
+				<label
+					>{m['labels.heightMm']()}<NumberInput
+						dense
+						unit="mm"
+						step={0.5}
+						min={2}
+						value={el.h}
+						onchange={(v) => update({ h: v })}
+					/></label
+				>
+			</div>
+			<div class="row2">
+				<label
+					>{m['labels.align']()}
+					<select value={el.align} onchange={(e) => update({ align: e.currentTarget.value })}>
+						<option value="left">{m['labels.alignLeft']()}</option>
+						<option value="center">{m['labels.alignCenter']()}</option>
+						<option value="right">{m['labels.alignRight']()}</option>
+					</select>
+				</label>
+				<label class="color-row"
+					>{m['filament.fields.colorHex']()}
+					<input
+						type="color"
+						value={el.color}
+						onchange={(e) => update({ color: e.currentTarget.value })}
+					/></label
+				>
+			</div>
+			<p class="hint">{m['labels.hintImage']()}</p>
+			<label
+				>{m['labels.imageFallback']()}
+				<input
+					type="text"
+					value={el.fallback}
+					onchange={(e) => update({ fallback: e.currentTarget.value })}
+				/>
+			</label>
+			<label
+				>{m['labels.insertField']()}
+				<select
+					value=""
+					onchange={(e) => {
+						insertField(e.currentTarget.value);
+						e.currentTarget.value = '';
+					}}
+				>
+					<option value="" disabled>{m['labels.chooseField']()}</option>
+					{#each groups as g (g.entity)}
+						<optgroup label={g.labelKey()}>
+							{#each g.items as item (item.token)}
+								<option value={item.token}>{item.labelKey ? item.labelKey() : item.label}</option>
+							{/each}
+						</optgroup>
+					{/each}
+				</select>
+			</label>
+			<label
+				>{m['labels.imageSource']()}
+				<input type="text" value={el.source} onchange={(e) => update({ source: e.currentTarget.value })} />
+			</label>
+			<p class="hint">{m['labels.hintImageSource']()}</p>
 		{:else if el.type === 'swatch'}
 			<div class="row2">
 				<label

@@ -3,8 +3,10 @@
 	import { Stage, Layer, Rect, Text, Path, Group, Image, Transformer } from 'svelte-konva';
 	import { labelKind, type LabelDesign, type LabelElement } from '$lib/labels/types';
 	import type { LabelBinding } from '$lib/labels/template';
-	import { elementToShape, qrLogoBox } from '$lib/labels/render';
+	import { elementToShape, imageSource, qrLogoBox } from '$lib/labels/render';
 	import { getLogoImage } from '$lib/labels/logo';
+	import { loadImages } from '$lib/labels/images';
+	import { vendorLogos } from '$lib/stores/vendorLogos.svelte';
 
 	interface Props {
 		design: LabelDesign;
@@ -42,10 +44,33 @@
 			.catch(() => {});
 	});
 
+	// Image-element sources (vendor logos) for the bound data, decoded async; until
+	// one arrives (or if it fails) the element draws its text fallback.
+	$effect(() => {
+		if (design.elements.some((el) => el.type === 'image')) void vendorLogos.ensure();
+	});
+	const imageSrcs = $derived(
+		design.elements.flatMap((el) => {
+			const src = el.type === 'image' ? imageSource(el, binding) : null;
+			return src ? [src] : [];
+		})
+	);
+	let images = $state<Map<string, HTMLImageElement>>(new Map());
+	$effect(() => {
+		const srcs = imageSrcs;
+		let cancelled = false;
+		loadImages(srcs).then((map) => {
+			if (!cancelled) images = map;
+		});
+		return () => {
+			cancelled = true;
+		};
+	});
+
 	const specs = $derived(
 		design.elements.map((el) => ({
 			el,
-			spec: elementToShape(el, { binding, baseUrl, kind: labelKind(design) })
+			spec: elementToShape(el, { binding, baseUrl, kind: labelKind(design), images })
 		}))
 	);
 	const stageW = $derived(design.label.w * pxPerMm);
@@ -80,22 +105,19 @@
 		onchange?.({ ...el, x: round(node.x()), y: round(node.y()) });
 	}
 
-	// Text re-wraps live while dragging a side handle: fold the horizontal scale
-	// into the wrap width and reset it to 1 each frame (Konva's editable-text
-	// pattern). Only scaleX is touched, so it never fights the transformer.
+	// Text lives in a group (with its optional background bar). It re-wraps live
+	// while dragging a side handle: fold the group's horizontal scale into the
+	// text (and background) width and reset it to 1 each frame (Konva's
+	// editable-text pattern). Only scaleX is touched, so it never fights the
+	// transformer. Non-wrapping text's group is clipped; the clip widens too.
 	function textTransform(node: Konva.Node) {
-		const t = node as Konva.Text;
-		t.width(Math.max(2, t.width() * t.scaleX()));
-		t.scaleX(1);
-	}
-
-	// Non-wrapping text lives in a clipped group; a side-handle drag widens the
-	// clip (and the inner text) instead of scaling.
-	function clipTextTransform(node: Konva.Node) {
 		const g = node as Konva.Group;
-		const newW = Math.max(2, g.clipWidth() * g.scaleX());
-		g.clipWidth(newW);
-		(g.findOne('Text') as Konva.Text | undefined)?.width(newW);
+		const t = g.findOne('Text') as Konva.Text | undefined;
+		if (!t) return;
+		const newW = Math.max(2, t.width() * g.scaleX());
+		t.width(newW);
+		(g.findOne('Rect') as Konva.Rect | undefined)?.width(newW);
+		if (g.clipWidth()) g.clipWidth(newW);
 		g.scaleX(1);
 	}
 
@@ -111,13 +133,13 @@
 				onchange?.({ ...base, size: round(el.size * sx) } as LabelElement);
 				break;
 			case 'text': {
-				// Non-wrapping text is a clipped group (width = clip width); wrapping
-				// text is a plain Text node (width = wrap width).
-				const w =
-					el.wrap === false ? (node as Konva.Group).clipWidth() * sx : (node as Konva.Text).width() * sx;
-				onchange?.({ ...base, w: round(w) } as LabelElement);
+				const t = (node as Konva.Group).findOne('Text') as Konva.Text | undefined;
+				onchange?.({ ...base, w: round((t?.width() ?? el.w) * sx) } as LabelElement);
 				break;
 			}
+			case 'image':
+				onchange?.({ ...base, w: round(el.w * sx), h: round(el.h * sy) } as LabelElement);
+				break;
 			case 'swatch':
 			case 'rect': {
 				const r = node as Konva.Rect;
@@ -196,16 +218,53 @@
 						{/if}
 					</Group>
 				{:else if spec.kind === 'text'}
-					<Text
-						{...spec.config}
+					<Group
 						name={el.id}
+						x={spec.x}
+						y={spec.y}
 						draggable={interactive}
 						onclick={() => select(el.id)}
 						ontap={() => select(el.id)}
 						ondragend={(e) => commitDrag(el, e.target)}
 						ontransform={(e) => textTransform(e.target)}
 						ontransformend={(e) => commitTransform(el, e.target)}
-					/>
+					>
+						{#if spec.bg}
+							<Rect
+								x={0}
+								y={0}
+								width={Number(spec.config.width)}
+								height={spec.bg.height}
+								fill={spec.bg.fill}
+							/>
+						{/if}
+						<Text {...spec.config} />
+					</Group>
+				{:else if spec.kind === 'image'}
+					<Group
+						name={el.id}
+						x={spec.x}
+						y={spec.y}
+						draggable={interactive}
+						onclick={() => select(el.id)}
+						ontap={() => select(el.id)}
+						ondragend={(e) => commitDrag(el, e.target)}
+						ontransformend={(e) => commitTransform(el, e.target)}
+					>
+						<!-- Transparent hit area so the whole box is draggable, not just the drawn pixels. -->
+						<Rect x={0} y={0} width={spec.w} height={spec.h} fill="rgba(0,0,0,0)" />
+						{#if spec.image}
+							<Image
+								image={spec.image.img}
+								x={spec.image.x}
+								y={spec.image.y}
+								width={spec.image.width}
+								height={spec.image.height}
+							/>
+						{:else if spec.text}
+							<Text {...spec.text} />
+						{/if}
+					</Group>
 				{:else if spec.kind === 'textclip'}
 					<Group
 						name={el.id}
@@ -219,9 +278,12 @@
 						onclick={() => select(el.id)}
 						ontap={() => select(el.id)}
 						ondragend={(e) => commitDrag(el, e.target)}
-						ontransform={(e) => clipTextTransform(e.target)}
+						ontransform={(e) => textTransform(e.target)}
 						ontransformend={(e) => commitTransform(el, e.target)}
 					>
+						{#if spec.bg}
+							<Rect x={0} y={0} width={spec.width} height={spec.bg.height} fill={spec.bg.fill} />
+						{/if}
 						<Text {...spec.config} />
 					</Group>
 				{:else}

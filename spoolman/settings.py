@@ -65,6 +65,9 @@ register_setting("currency", SettingType.STRING, json.dumps("EUR"))
 register_setting("round_prices", SettingType.BOOLEAN, json.dumps(obj=False))
 register_setting("print_presets", SettingType.ARRAY, json.dumps([]))
 register_setting("label_designs", SettingType.ARRAY, json.dumps([]))
+# Vendor id -> logo image (a data URL) for printing on labels. Kept out of the vendor's extra
+# fields because every spool response embeds its vendor, and a logo in each would bloat them.
+register_setting("vendor_logos", SettingType.OBJECT, json.dumps({}))
 
 register_setting("extra_fields_vendor", SettingType.ARRAY, json.dumps([]))
 register_setting("extra_fields_filament", SettingType.ARRAY, json.dumps([]))

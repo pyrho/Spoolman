@@ -639,5 +639,20 @@
     "vendor.fields.registered": "Registered",
     "vendor.showAsList": "Show as a list",
     "vendor.fieldsHelp.emptySpoolWeight": "The weight of an empty spool from this manufacturer.",
-    "yes": "Yes"
+    "yes": "Yes",
+    "labels.addBadge": "Material badge",
+    "labels.addLogo": "Manufacturer logo",
+    "labels.kind.image": "Logo / image",
+    "labels.background": "Background",
+    "labels.paddingMm": "Padding",
+    "labels.imageFallback": "Text when there's no logo",
+    "labels.imageSource": "Image source",
+    "labels.hintImage": "Draws the logo uploaded on the manufacturer's page, fitted into the box. Without one, the text below is drawn in bold, sized to fill the box.",
+    "labels.hintImageSource": "A field or URL that resolves to an image. {vendor.logo} is the uploaded manufacturer logo; other hosts must allow cross-origin (CORS) requests.",
+    "vendor.fields.logo": "Label logo",
+    "vendor.fieldsHelp.logo": "Printed by the \"Manufacturer logo\" element in label designs. Margins are trimmed automatically.",
+    "vendor.logo.upload": "Upload image…",
+    "vendor.logo.replace": "Replace",
+    "vendor.logo.remove": "Remove",
+    "vendor.logo.failed": "Couldn't save that logo."
 }

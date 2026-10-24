@@ -2,6 +2,7 @@ import type { Spool, Filament, Vendor } from '$lib/types';
 import type { FieldDef, EntityType } from '$lib/api/fields';
 import type { LabelKind } from './types';
 import * as m from '$lib/paraglide/messages';
+import { vendorLogos } from '$lib/stores/vendorLogos.svelte';
 
 // Resolves `{placeholder}` templates against a spool and its filament/vendor.
 // Ported from v1's renderLabelContents (client/src/pages/printing/printing.tsx)
@@ -68,6 +69,8 @@ const RESOLVERS: Record<string, (b: LabelBinding) => string | number | null | un
 	'vendor.name': (b) => b.vendor?.name,
 	'vendor.emptyWeight': (b) => fmtNum(b.vendor?.emptyWeight),
 	'vendor.comment': (b) => b.vendor?.comment,
+	// Callers rendering a logo await vendorLogos.ensure() first (see print.ts).
+	'vendor.logo': (b) => vendorLogos.get(b.vendor?.id),
 	'vendor.externalId': (b) => b.vendor?.externalId,
 	'vendor.registered': (b) => b.vendor?.registeredLabel
 };

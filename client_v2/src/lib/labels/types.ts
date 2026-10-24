@@ -5,7 +5,7 @@
 
 import { DEFAULT_EXPORT_FORMAT, type ExportFormatId } from './export';
 
-export type ElementType = 'qr' | 'text' | 'swatch' | 'rect';
+export type ElementType = 'qr' | 'text' | 'swatch' | 'rect' | 'image';
 
 /**
  * What real-world entity a design labels. A `spool` label binds to a single spool
@@ -69,6 +69,13 @@ export interface TextElement extends BaseElement {
 	wrap: boolean;
 	/** e.g. "**{filament.name}**\n{filament.material}" — see labels/template.ts. */
 	template: string;
+	/**
+	 * Background fill spanning the block's width × text height, or ''/absent for
+	 * none. White text on a black bar makes a material "badge".
+	 */
+	bg?: string;
+	/** Inner padding in mm between the background edge and the text. */
+	pad?: number;
 }
 
 /** A rectangle filled with the spool's filament color(s). */
@@ -93,7 +100,29 @@ export interface RectElement extends BaseElement {
 	strokeWidth: number;
 }
 
-export type LabelElement = QrElement | TextElement | SwatchElement | RectElement;
+/**
+ * An image fitted (aspect preserved) into a w×h box — typically the vendor's
+ * logo. `source` is a template resolving to an image URL or data URL; when it
+ * resolves to nothing, or the image can't be loaded, `fallback` is drawn instead
+ * as bold text sized to fill the box (e.g. the vendor's name).
+ */
+export interface ImageElement extends BaseElement {
+	type: 'image';
+	w: number;
+	h: number;
+	/** Template for the image URL, e.g. `{vendor.logo}`. */
+	source: string;
+	/** Template for the text drawn when there's no image, e.g. `{vendor.name}`. */
+	fallback: string;
+	align: 'left' | 'center' | 'right';
+	/** Fallback text color. */
+	color: string;
+}
+
+export type LabelElement = QrElement | TextElement | SwatchElement | RectElement | ImageElement;
+
+/** The logo uploaded on the vendor's page (see $lib/stores/vendorLogos). */
+export const DEFAULT_LOGO_SOURCE = '{vendor.logo}';
 
 export interface LabelDesign {
 	id: string;
