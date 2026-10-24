@@ -146,6 +146,70 @@ function fallbackTextConfig(el: ImageElement, text: string): Record<string, unkn
 	return { ...base, x: 0, y: 0, width: el.w, height: el.h, fontSize };
 }
 
+const TEXT_LINE_HEIGHT = 1.15;
+const capHeights = new Map<string, number | null>();
+
+/** Capital height as a fraction of the font size, measured on a large sample. */
+function capHeight(fontStyle: string): number | null {
+	if (!capHeights.has(fontStyle)) {
+		let ratio: number | null = null;
+		try {
+			const size = 100;
+			const m = new Konva.Text({ fontSize: size, fontStyle, fontFamily: 'sans-serif' }).measureSize('H');
+			if (m.actualBoundingBoxAscent > 0) ratio = m.actualBoundingBoxAscent / size;
+		} catch {
+			// No canvas (e.g. a test environment): callers fall back to Konva's centring.
+		}
+		capHeights.set(fontStyle, ratio);
+	}
+	return capHeights.get(fontStyle)!;
+}
+
+/**
+ * Vertical offset (mm) that centres a text block's capitals — from the first
+ * line's cap top to the last line's baseline — in a box `boxHeight` tall, for
+ * a top-aligned config. Null when it can't be measured.
+ *
+ * Konva can't do this itself: it places the baseline from the font's
+ * ascent/descent, measured at the configured font size. Label fonts are a few
+ * millimetres, i.e. a "3px" font, whose metrics the browser rounds to whole
+ * pixels — so where the capitals land drifts with the size. The baseline is
+ * therefore recomputed here with the exact same measurement Konva makes (same
+ * rounding), and only the cap height comes from a large, accurate sample.
+ */
+function capCentreOffset(config: Record<string, unknown>, lines: number, boxHeight: number): number | null {
+	const fontStyle = String(config.fontStyle ?? 'normal');
+	const cap = capHeight(fontStyle);
+	if (cap === null) return null;
+	const fontSize = Number(config.fontSize) || 0;
+	const lineHeight = Number(config.lineHeight) || TEXT_LINE_HEIGHT;
+	const pad = Number(config.padding) || 0;
+	let ascent: number;
+	let descent: number;
+	try {
+		// Mirrors Konva.Text#_sceneFunc (non-legacy rendering): baseline sits
+		// (ascent - descent) / 2 below the middle of the first line.
+		const m = new Konva.Text({ fontSize, fontStyle, fontFamily: 'sans-serif' }).measureSize('M');
+		ascent = m.fontBoundingBoxAscent ?? m.actualBoundingBoxAscent;
+		descent = m.fontBoundingBoxDescent ?? m.actualBoundingBoxDescent;
+	} catch {
+		return null;
+	}
+	const firstBaseline = pad + (ascent - descent) / 2 + (lineHeight * fontSize) / 2;
+	const inkTop = firstBaseline - cap * fontSize;
+	const inkBottom = firstBaseline + (lines - 1) * lineHeight * fontSize;
+	return boxHeight / 2 - (inkTop + inkBottom) / 2;
+}
+
+/** Number of lines a wrapping text config breaks into. */
+function measuredLines(config: Record<string, unknown>): number {
+	try {
+		return Math.max(1, new Konva.Text(config).textArr.length);
+	} catch {
+		return Math.max(1, String(config.text ?? '').split('\n').length);
+	}
+}
+
 /** Rendered height (mm) of a wrapping text config, for sizing its background. */
 function measuredHeight(config: Record<string, unknown>): number {
 	try {
@@ -154,7 +218,7 @@ function measuredHeight(config: Record<string, unknown>): number {
 		const fontSize = Number(config.fontSize) || 0;
 		const pad = Number(config.padding) || 0;
 		const lines = String(config.text ?? '').split('\n').length;
-		return fontSize * 1.15 * lines + pad * 2;
+		return fontSize * TEXT_LINE_HEIGHT * lines + pad * 2;
 	}
 }
 
@@ -194,7 +258,7 @@ export function elementToShape(el: LabelElement, ctx: RenderContext): ShapeSpec 
 				fontFamily: 'sans-serif',
 				align: el.align,
 				fill: el.color,
-				lineHeight: 1.15,
+				lineHeight: TEXT_LINE_HEIGHT,
 				padding: pad
 			};
 			// Default (undefined) wraps, for backward compatibility with older designs.
@@ -202,14 +266,26 @@ export function elementToShape(el: LabelElement, ctx: RenderContext): ShapeSpec 
 			// print code place them, together with any background, in a group there.
 			if (el.wrap !== false) {
 				const config = { x: 0, y: 0, width: el.w, wrap: 'word', ...common };
-				const bg = el.bg ? { fill: el.bg, height: measuredHeight(config) } : undefined;
-				return { kind: 'text', x: el.x, y: el.y, bg, config };
+				if (!el.bg) return { kind: 'text', x: el.x, y: el.y, config };
+				const height = measuredHeight(config);
+				const lines = measuredLines(config);
+				// Nudge the text (not the bar) so its capitals sit centred in the bar.
+				const dy = capCentreOffset(config, lines, height) ?? 0;
+				return { kind: 'text', x: el.x, y: el.y, bg: { fill: el.bg, height }, config: { ...config, y: dy } };
 			}
 			// No wrap: keep each line on one line and clip horizontal overflow to `w`.
 			const lines = Math.max(1, text.split('\n').length);
-			const clipHeight = el.fontSize * 1.15 * lines + el.fontSize * 0.3 + pad * 2;
+			const clipHeight = el.fontSize * TEXT_LINE_HEIGHT * lines + el.fontSize * 0.3 + pad * 2;
 			// Pin the text height so the transformer box matches the clip (Konva
 			// otherwise reports the wrapped height even with wrap disabled).
+			const base = { x: 0, y: 0, width: el.w, height: clipHeight, wrap: 'none', ...common };
+			// With a background, centre the capitals in the bar: the clip box has
+			// descender slack below the last line, and Konva's own centring still
+			// leaves capitals high. Without one, stay top-aligned so existing designs
+			// don't shift. Falls back to Konva's centring when it can't be measured.
+			const dy = el.bg ? capCentreOffset(base, lines, clipHeight) : 0;
+			const config =
+				dy === null ? { ...base, verticalAlign: 'middle' } : { ...base, verticalAlign: 'top', y: dy };
 			return {
 				kind: 'textclip',
 				x: el.x,
@@ -217,7 +293,7 @@ export function elementToShape(el: LabelElement, ctx: RenderContext): ShapeSpec 
 				width: el.w,
 				clipHeight,
 				bg: el.bg ? { fill: el.bg, height: clipHeight } : undefined,
-				config: { x: 0, y: 0, width: el.w, height: clipHeight, wrap: 'none', ...common }
+				config
 			};
 		}
 		case 'separator': {
