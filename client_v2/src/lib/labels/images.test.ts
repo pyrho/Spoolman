@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { containBox } from './images';
-import { contentBounds } from './logoUpload';
+import { contentBounds, fitLogo, LogoTooLargeError } from './logoUpload';
+import { SETTING_MAX_LENGTH } from '$lib/stores/vendorLogos.svelte';
 
 describe('containBox', () => {
 	it('fits a wide image to the box width, centred vertically', () => {
@@ -41,5 +42,45 @@ describe('contentBounds', () => {
 	});
 	it('returns null for a blank image', () => {
 		expect(contentBounds(image(3, 3, []), 3, 3)).toBeNull();
+	});
+});
+
+describe('fitLogo', () => {
+	// A fake encoder whose output size is proportional to the pixel count.
+	const encoder =
+		(bytesPerPx: Record<string, number>, calls: string[] = []) =>
+		(side: number, type: string) => {
+			calls.push(`${side}:${type}`);
+			return `data:${type};base64,` + 'A'.repeat(Math.round(side * side * (bytesPerPx[type] ?? 0)));
+		};
+
+	it('keeps the largest PNG that fits', () => {
+		const url = fitLogo(800, encoder({ 'image/png': 0.05, 'image/webp': 0.01 }));
+		expect(url.startsWith('data:image/png')).toBe(true);
+		expect(url.length + 2).toBeLessThanOrEqual(SETTING_MAX_LENGTH);
+	});
+
+	it('falls back to WebP, then to smaller sizes, until it fits', () => {
+		const calls: string[] = [];
+		const url = fitLogo(800, encoder({ 'image/png': 0.5, 'image/webp': 0.2 }, calls));
+		expect(url.startsWith('data:image/webp')).toBe(true);
+		expect(url.length + 2).toBeLessThanOrEqual(SETTING_MAX_LENGTH);
+		expect(calls.slice(0, 3)).toEqual(['800:image/png', '800:image/webp', '640:image/png']);
+	});
+
+	it('skips a format the browser silently encodes as PNG instead', () => {
+		// Safari ignores image/webp in toDataURL and returns a PNG.
+		const pngOnly = (side: number) => 'data:image/png;base64,' + 'A'.repeat(side * side * 0.5);
+		expect(fitLogo(800, pngOnly).length + 2).toBeLessThanOrEqual(SETTING_MAX_LENGTH);
+	});
+
+	it('never upscales a small logo', () => {
+		const calls: string[] = [];
+		fitLogo(300, encoder({ 'image/png': 0.01 }, calls));
+		expect(calls).toEqual(['300:image/png']);
+	});
+
+	it('gives up when nothing fits', () => {
+		expect(() => fitLogo(800, encoder({ 'image/png': 50, 'image/webp': 50 }))).toThrow(LogoTooLargeError);
 	});
 });

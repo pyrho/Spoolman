@@ -2,7 +2,7 @@
 	import Button from '../Button.svelte';
 	import { vendorLogos } from '$lib/stores/vendorLogos.svelte';
 	import { toasts } from '$lib/stores/toasts.svelte';
-	import { prepareLogo } from '$lib/labels/logoUpload';
+	import { LogoTooLargeError, prepareLogo } from '$lib/labels/logoUpload';
 	import * as m from '$lib/paraglide/messages';
 
 	// The vendor's label logo: a preview plus upload / remove. Printed by the
@@ -11,7 +11,7 @@
 	let { vendorId }: { vendorId: string } = $props();
 
 	$effect(() => {
-		void vendorLogos.ensure();
+		void vendorLogos.ensure(vendorId);
 	});
 	let logo = $derived(vendorLogos.get(vendorId));
 	let busy = $state(false);
@@ -24,7 +24,7 @@
 			await vendorLogos.set(vendorId, dataUrl);
 		} catch (e) {
 			console.error('Failed to save vendor logo', e);
-			toasts.error(m['vendor.logo.failed']());
+			toasts.error(e instanceof LogoTooLargeError ? m['vendor.logo.tooLarge']() : m['vendor.logo.failed']());
 		} finally {
 			busy = false;
 		}

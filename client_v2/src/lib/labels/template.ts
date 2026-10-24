@@ -69,7 +69,7 @@ const RESOLVERS: Record<string, (b: LabelBinding) => string | number | null | un
 	'vendor.name': (b) => b.vendor?.name,
 	'vendor.emptyWeight': (b) => fmtNum(b.vendor?.emptyWeight),
 	'vendor.comment': (b) => b.vendor?.comment,
-	// Callers rendering a logo await vendorLogos.ensure() first (see print.ts).
+	// Callers rendering a logo load it first with vendorLogos.ensure (see print.ts).
 	'vendor.logo': (b) => vendorLogos.get(b.vendor?.id),
 	'vendor.externalId': (b) => b.vendor?.externalId,
 	'vendor.registered': (b) => b.vendor?.registeredLabel

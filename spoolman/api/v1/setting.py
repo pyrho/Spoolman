@@ -13,7 +13,7 @@ from spoolman.database import setting
 from spoolman.database.database import get_db_session
 from spoolman.exceptions import ItemNotFoundError
 from spoolman.extra_field_registry import invalidate_extra_field_cache, validate_extra_field_setting
-from spoolman.settings import SETTINGS, parse_setting
+from spoolman.settings import SETTINGS, is_vendor_logo_key, parse_setting
 from spoolman.ws import websocket_manager
 
 router = APIRouter(
@@ -24,6 +24,8 @@ router = APIRouter(
 # ruff: noqa: D103
 
 logger = logging.getLogger(__name__)
+
+LOGGED_VALUE_MAX_LENGTH = 200
 
 
 async def require_json_content_type(request: Request) -> None:
@@ -125,6 +127,10 @@ async def find(
     # First get all settings that have been set.
     db_items = await setting.get_all(db)
     for db_item in db_items:
+        # Logos are fetched one vendor at a time; listing them here would ship every logo to
+        # every client on startup.
+        if is_vendor_logo_key(db_item.key):
+            continue
         try:
             definition = parse_setting(db_item.key)
         except ValueError:
@@ -211,7 +217,11 @@ async def update(
             await setting.update(db=db, definition=definition, value=body)
         except ValueError as e:
             return JSONResponse(status_code=400, content=Message(message=str(e)).dict())
-        logger.info('Setting "%s" has been set to "%s".', key, body)
+        # Some values (label designs, logos) run to tens of kilobytes; don't flood the log.
+        shown = (
+            body if len(body) <= LOGGED_VALUE_MAX_LENGTH else f"{body[:LOGGED_VALUE_MAX_LENGTH]}… ({len(body)} chars)"
+        )
+        logger.info('Setting "%s" has been set to "%s".', key, shown)
     else:
         await setting.delete(db=db, definition=definition)
         logger.info('Setting "%s" has been unset.', key)

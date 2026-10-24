@@ -1,10 +1,42 @@
+import { SETTING_MAX_LENGTH } from '$lib/stores/vendorLogos.svelte';
+
 // Turns an uploaded logo file into the data URL stored for a vendor: decoded,
 // cropped to its visible content (logos usually ship with generous margins,
-// which would shrink the printed mark), and scaled down to a size that's still
-// sharp on a label but small enough to keep the settings payload light.
+// which would shrink the printed mark), and scaled down until it fits in one
+// server setting (64 KiB) — sharp on a label, but never too big to save.
 
 /** Longest side of the stored image, in px. ~70 mm wide at 300 dpi. */
 const MAX_SIDE = 800;
+/** Sizes tried, largest first, until the encoded logo fits a setting. */
+const SIDES = [800, 640, 512, 400, 320, 256];
+/** Formats tried at each size: PNG first (exact), then WebP (smaller, also keeps transparency). */
+const FORMATS = ['image/png', 'image/webp'] as const;
+
+/** Raised when even the smallest encoding is too big to store. */
+export class LogoTooLargeError extends Error {
+	constructor() {
+		super('Logo is too large to store, even scaled down.');
+		this.name = 'LogoTooLargeError';
+	}
+}
+
+/**
+ * Pick the largest encoding that fits a setting. `encode(side, type)` renders
+ * the logo with its longest side at `side` px; its result is stored as a JSON
+ * string, hence the two quote characters. Browsers that can't encode a format
+ * fall back to PNG, which is detected by the data URL's prefix and skipped.
+ */
+export function fitLogo(longSide: number, encode: (side: number, type: string) => string): string {
+	const sides = [...new Set(SIDES.map((s) => Math.min(s, longSide)))];
+	for (const side of sides) {
+		for (const type of FORMATS) {
+			const url = encode(side, type);
+			if (!url.startsWith(`data:${type}`)) continue;
+			if (url.length + 2 <= SETTING_MAX_LENGTH) return url;
+		}
+	}
+	throw new LogoTooLargeError();
+}
 /** Pixels at least this close to white (or this transparent) count as margin. */
 const WHITE = 245;
 const TRANSPARENT = 16;
@@ -78,10 +110,14 @@ export async function prepareLogo(file: File): Promise<string> {
 		w: src.width,
 		h: src.height
 	};
-	const scale = Math.min(1, MAX_SIDE / Math.max(bounds.w, bounds.h));
 	const out = document.createElement('canvas');
-	out.width = Math.max(1, Math.round(bounds.w * scale));
-	out.height = Math.max(1, Math.round(bounds.h * scale));
-	out.getContext('2d')!.drawImage(src, bounds.x, bounds.y, bounds.w, bounds.h, 0, 0, out.width, out.height);
-	return out.toDataURL('image/png');
+	const octx = out.getContext('2d')!;
+	return fitLogo(Math.max(bounds.w, bounds.h), (side, type) => {
+		const scale = Math.min(1, side / Math.max(bounds.w, bounds.h));
+		out.width = Math.max(1, Math.round(bounds.w * scale));
+		out.height = Math.max(1, Math.round(bounds.h * scale));
+		octx.clearRect(0, 0, out.width, out.height);
+		octx.drawImage(src, bounds.x, bounds.y, bounds.w, bounds.h, 0, 0, out.width, out.height);
+		return out.toDataURL(type, 0.92);
+	});
 }

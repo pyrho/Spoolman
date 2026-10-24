@@ -38,7 +38,8 @@ export interface LabelAssets {
 
 /** Load everything rendering `design` for these bindings will draw. */
 export async function loadLabelAssets(design: LabelDesign, bindings: LabelBinding[]): Promise<LabelAssets> {
-	if (design.elements.some((el) => el.type === 'image')) await vendorLogos.ensure();
+	if (design.elements.some((el) => el.type === 'image'))
+		await vendorLogos.ensureAll(bindings.map((b) => b.vendor?.id));
 	const srcs: string[] = [];
 	for (const el of design.elements) {
 		if (el.type !== 'image') continue;

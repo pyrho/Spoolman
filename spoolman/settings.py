@@ -4,6 +4,7 @@ All settings are JSON encoded and stored in the database.
 """
 
 import json
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -54,19 +55,33 @@ def register_setting(key: str, typ: SettingType, default: str) -> None:
     SETTINGS[key] = SettingDefinition(key, typ, default)
 
 
+# A vendor's logo for printing on labels, as an image data URL, under "vendor_logo.<vendor id>".
+# One setting per vendor so each logo gets the full setting size limit to itself. Not a vendor
+# extra field: every spool response embeds its vendor, and a logo in each would bloat them.
+VENDOR_LOGO_PREFIX = "vendor_logo."
+_VENDOR_LOGO_KEY = re.compile(rf"^{re.escape(VENDOR_LOGO_PREFIX)}[1-9][0-9]{{0,18}}$")
+
+
+def is_vendor_logo_key(key: str) -> bool:
+    """Whether a key names a per-vendor logo setting."""
+    return _VENDOR_LOGO_KEY.match(key) is not None
+
+
 def parse_setting(key: str) -> SettingDefinition:
     """Parse a setting key."""
-    if key not in SETTINGS:
-        raise ValueError(f"Setting {key} does not exist.")
-    return SETTINGS[key]
+    if key in SETTINGS:
+        return SETTINGS[key]
+    if is_vendor_logo_key(key):
+        return SettingDefinition(key, SettingType.STRING, json.dumps(""))
+    raise ValueError(f"Setting {key} does not exist.")
 
 
 register_setting("currency", SettingType.STRING, json.dumps("EUR"))
 register_setting("round_prices", SettingType.BOOLEAN, json.dumps(obj=False))
 register_setting("print_presets", SettingType.ARRAY, json.dumps([]))
 register_setting("label_designs", SettingType.ARRAY, json.dumps([]))
-# Vendor id -> logo image (a data URL) for printing on labels. Kept out of the vendor's extra
-# fields because every spool response embeds its vendor, and a logo in each would bloat them.
+# Superseded by the per-vendor settings below: it held every logo in one value, which quickly
+# ran into the 64 KiB setting limit. Kept registered so clients can move old logos across.
 register_setting("vendor_logos", SettingType.OBJECT, json.dumps({}))
 
 register_setting("extra_fields_vendor", SettingType.ARRAY, json.dumps([]))

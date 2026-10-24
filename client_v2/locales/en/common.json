@@ -662,5 +662,6 @@
     "labels.direction": "Direction",
     "labels.horizontal": "Horizontal",
     "labels.vertical": "Vertical",
-    "labels.dashed": "Dashed"
+    "labels.dashed": "Dashed",
+    "vendor.logo.tooLarge": "That image is too detailed to store, even scaled down. Try a simpler or smaller version of the logo."
 }

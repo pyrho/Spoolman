@@ -47,7 +47,7 @@
 	// Image-element sources (vendor logos) for the bound data, decoded async; until
 	// one arrives (or if it fails) the element draws its text fallback.
 	$effect(() => {
-		if (design.elements.some((el) => el.type === 'image')) void vendorLogos.ensure();
+		if (design.elements.some((el) => el.type === 'image')) void vendorLogos.ensure(binding?.vendor?.id);
 	});
 	const imageSrcs = $derived(
 		design.elements.flatMap((el) => {
