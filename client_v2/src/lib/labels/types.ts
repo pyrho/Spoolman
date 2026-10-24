@@ -5,7 +5,7 @@
 
 import { DEFAULT_EXPORT_FORMAT, type ExportFormatId } from './export';
 
-export type ElementType = 'qr' | 'text' | 'swatch' | 'rect' | 'image';
+export type ElementType = 'qr' | 'text' | 'swatch' | 'rect' | 'image' | 'separator';
 
 /**
  * What real-world entity a design labels. A `spool` label binds to a single spool
@@ -119,7 +119,20 @@ export interface ImageElement extends BaseElement {
 	color: string;
 }
 
-export type LabelElement = QrElement | TextElement | SwatchElement | RectElement | ImageElement;
+/** A straight divider line, e.g. between a label's header and its specs. */
+export interface SeparatorElement extends BaseElement {
+	type: 'separator';
+	/** Length in mm, along the line's direction. */
+	length: number;
+	/** Line thickness in mm. */
+	thickness: number;
+	color: string;
+	vertical: boolean;
+	dashed: boolean;
+}
+
+export type LabelElement =
+	QrElement | TextElement | SwatchElement | RectElement | ImageElement | SeparatorElement;
 
 /** The logo uploaded on the vendor's page (see $lib/stores/vendorLogos). */
 export const DEFAULT_LOGO_SOURCE = '{vendor.logo}';

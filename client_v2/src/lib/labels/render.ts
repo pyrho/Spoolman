@@ -49,6 +49,16 @@ export type ShapeSpec =
 			image?: { img: HTMLImageElement; x: number; y: number; width: number; height: number };
 			/** ...otherwise the fallback text config (box-relative). */
 			text?: Record<string, unknown>;
+	  }
+	| {
+			kind: 'separator';
+			x: number;
+			y: number;
+			/** The line's bounding box (mm): length × thickness, rotated when vertical. */
+			w: number;
+			h: number;
+			/** Box-relative Konva.Line config. */
+			line: Record<string, unknown>;
 	  };
 
 const PLACEHOLDER_SWATCH = '#9aa0a6';
@@ -208,6 +218,28 @@ export function elementToShape(el: LabelElement, ctx: RenderContext): ShapeSpec 
 				clipHeight,
 				bg: el.bg ? { fill: el.bg, height: clipHeight } : undefined,
 				config: { x: 0, y: 0, width: el.w, height: clipHeight, wrap: 'none', ...common }
+			};
+		}
+		case 'separator': {
+			const t = el.thickness;
+			const w = el.vertical ? t : el.length;
+			const h = el.vertical ? el.length : t;
+			// Stroke runs through the middle of the box, so the box's top-left (x/y) is
+			// the line's top-left edge — same convention as every other element.
+			const points = el.vertical ? [t / 2, 0, t / 2, el.length] : [0, t / 2, el.length, t / 2];
+			return {
+				kind: 'separator',
+				x: el.x,
+				y: el.y,
+				w,
+				h,
+				line: {
+					points,
+					stroke: el.color,
+					strokeWidth: t,
+					// Dash lengths scale with thickness so a heavy dashed line keeps its rhythm.
+					dash: el.dashed ? [Math.max(0.8, t * 4), Math.max(0.5, t * 2.5)] : undefined
+				}
 			};
 		}
 		case 'image': {

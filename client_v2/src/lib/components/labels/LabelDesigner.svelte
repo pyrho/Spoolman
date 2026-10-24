@@ -16,6 +16,7 @@
 	import RectangleHorizontal from '@lucide/svelte/icons/rectangle-horizontal';
 	import ImageIcon from '@lucide/svelte/icons/image';
 	import Tag from '@lucide/svelte/icons/tag';
+	import Minus from '@lucide/svelte/icons/minus';
 
 	interface Props {
 		design: LabelDesign;
@@ -176,6 +177,19 @@
 			color: '#000000'
 		});
 	}
+	function addSeparator() {
+		add({
+			id: uid(),
+			type: 'separator',
+			x: 2,
+			y: 2,
+			length: clampW(design.label.w - 4),
+			thickness: 0.2,
+			color: '#cccccc',
+			vertical: false,
+			dashed: false
+		});
+	}
 	function addSwatch() {
 		add({ id: uid(), type: 'swatch', x: 2, y: 2, w: clampW(20), h: clampH(6), radius: 1 });
 	}
@@ -214,6 +228,7 @@
 		<button onclick={addText}><Type size={15} /> {m['labels.addText']()}</button>
 		<button onclick={addBadge}><Tag size={15} /> {m['labels.addBadge']()}</button>
 		<button onclick={addLogo}><ImageIcon size={15} /> {m['labels.addLogo']()}</button>
+		<button onclick={addSeparator}><Minus size={15} /> {m['labels.addSeparator']()}</button>
 		<button onclick={addSwatch}><SwatchBook size={15} /> {m['labels.addSwatch']()}</button>
 		<button onclick={addRect}><RectangleHorizontal size={15} /> {m['labels.addRect']()}</button>
 

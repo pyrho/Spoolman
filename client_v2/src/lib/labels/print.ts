@@ -119,6 +119,10 @@ export function renderLabelDataUrl(
 			layer.add(
 				textGroup(spec.x, spec.y, spec.bg, spec.config, { width: spec.width, height: spec.clipHeight })
 			);
+		} else if (spec.kind === 'separator') {
+			const group = new Konva.Group({ x: spec.x, y: spec.y });
+			group.add(new Konva.Line(spec.line));
+			layer.add(group);
 		} else if (spec.kind === 'image') {
 			const group = new Konva.Group({ x: spec.x, y: spec.y });
 			if (spec.image) {

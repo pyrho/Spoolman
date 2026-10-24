@@ -654,5 +654,13 @@
     "vendor.logo.upload": "Upload image…",
     "vendor.logo.replace": "Replace",
     "vendor.logo.remove": "Remove",
-    "vendor.logo.failed": "Couldn't save that logo."
+    "vendor.logo.failed": "Couldn't save that logo.",
+    "labels.addSeparator": "Separator",
+    "labels.kind.separator": "Separator",
+    "labels.lengthMm": "Length",
+    "labels.thicknessMm": "Thickness",
+    "labels.direction": "Direction",
+    "labels.horizontal": "Horizontal",
+    "labels.vertical": "Vertical",
+    "labels.dashed": "Dashed"
 }

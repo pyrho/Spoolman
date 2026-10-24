@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Konva from 'konva';
-	import { Stage, Layer, Rect, Text, Path, Group, Image, Transformer } from 'svelte-konva';
+	import { Stage, Layer, Rect, Text, Path, Group, Image, Line, Transformer } from 'svelte-konva';
 	import { labelKind, type LabelDesign, type LabelElement } from '$lib/labels/types';
 	import type { LabelBinding } from '$lib/labels/template';
 	import { elementToShape, imageSource, qrLogoBox } from '$lib/labels/render';
@@ -75,7 +75,8 @@
 	);
 	const stageW = $derived(design.label.w * pxPerMm);
 	const stageH = $derived(design.label.h * pxPerMm);
-	const selectedType = $derived(design.elements.find((e) => e.id === selectedId)?.type);
+	const selectedEl = $derived(design.elements.find((e) => e.id === selectedId));
+	const selectedType = $derived(selectedEl?.type);
 
 	// Re-attach the transformer to the selected element's node every render. Each
 	// top-level node carries its element id as a Konva name, so we look it up
@@ -140,6 +141,9 @@
 			case 'image':
 				onchange?.({ ...base, w: round(el.w * sx), h: round(el.h * sy) } as LabelElement);
 				break;
+			case 'separator':
+				onchange?.({ ...base, length: round(el.length * (el.vertical ? sy : sx)) } as LabelElement);
+				break;
 			case 'swatch':
 			case 'rect': {
 				const r = node as Konva.Rect;
@@ -165,12 +169,15 @@
 	];
 	// Text resizes by width only (side handles) so it re-wraps; QR stays square;
 	// boxes resize freely. Font size is set from the inspector.
+	// A separator resizes along its length only; thickness is set from the inspector.
 	const anchors = $derived(
-		selectedType === 'text'
+		selectedType === 'text' || (selectedEl?.type === 'separator' && !selectedEl.vertical)
 			? ['middle-left', 'middle-right']
-			: selectedType === 'qr'
-				? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
-				: ALL_ANCHORS
+			: selectedEl?.type === 'separator'
+				? ['top-center', 'bottom-center']
+				: selectedType === 'qr'
+					? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+					: ALL_ANCHORS
 	);
 
 	interface Box {
@@ -180,10 +187,13 @@
 		height: number;
 		rotation: number;
 	}
-	// Enforce a small minimum so a shape can't be collapsed to nothing.
+	// Enforce a small minimum so a shape can't be collapsed to nothing. Only the
+	// dimension being dragged is checked: a separator is thinner than the minimum
+	// across its length by design, and must still be resizable along it.
 	function boundBox(oldBox: Box, newBox: Box): Box {
 		const min = 3 * pxPerMm;
-		return Math.abs(newBox.width) < min || Math.abs(newBox.height) < min ? oldBox : newBox;
+		const tooSmall = (n: number, o: number) => Math.abs(n) < min && Math.abs(n - o) > 0.01;
+		return tooSmall(newBox.width, oldBox.width) || tooSmall(newBox.height, oldBox.height) ? oldBox : newBox;
 	}
 
 	const TF_CONFIG = {
@@ -240,6 +250,20 @@
 							visible={!!spec.bg}
 						/>
 						<Text {...spec.config} />
+					</Group>
+				{:else if spec.kind === 'separator'}
+					<Group
+						name={el.id}
+						x={spec.x}
+						y={spec.y}
+						draggable={interactive}
+						onclick={() => select(el.id)}
+						ontap={() => select(el.id)}
+						ondragend={(e) => commitDrag(el, e.target)}
+						ontransformend={(e) => commitTransform(el, e.target)}
+					>
+						<!-- A hairline is hard to click; widen its hit area without changing the box. -->
+						<Line {...spec.line} hitStrokeWidth={Math.max(2, Number(spec.line.strokeWidth))} />
 					</Group>
 				{:else if spec.kind === 'image'}
 					<Group

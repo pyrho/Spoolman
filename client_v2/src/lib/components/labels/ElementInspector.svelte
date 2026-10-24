@@ -21,7 +21,8 @@
 		rect: m['labels.kind.rect'],
 		swatch: m['labels.kind.swatch'],
 		text: m['labels.kind.text'],
-		image: m['labels.kind.image']
+		image: m['labels.kind.image'],
+		separator: m['labels.kind.separator']
 	};
 
 	// Emit an updated element with a shallow patch applied.
@@ -313,6 +314,57 @@
 				<input type="text" value={el.source} onchange={(e) => update({ source: e.currentTarget.value })} />
 			</label>
 			<p class="hint">{m['labels.hintImageSource']()}</p>
+		{:else if el.type === 'separator'}
+			<div class="row2">
+				<label
+					>{m['labels.lengthMm']()}<NumberInput
+						dense
+						unit="mm"
+						step={0.5}
+						min={1}
+						value={el.length}
+						onchange={(v) => update({ length: v })}
+					/></label
+				>
+				<label
+					>{m['labels.thicknessMm']()}<NumberInput
+						dense
+						unit="mm"
+						step={0.05}
+						min={0.05}
+						value={el.thickness}
+						onchange={(v) => update({ thickness: v })}
+					/></label
+				>
+			</div>
+			<label
+				>{m['labels.direction']()}
+				<select
+					value={el.vertical ? 'vertical' : 'horizontal'}
+					onchange={(e) => update({ vertical: e.currentTarget.value === 'vertical' })}
+				>
+					<option value="horizontal">{m['labels.horizontal']()}</option>
+					<option value="vertical">{m['labels.vertical']()}</option>
+				</select>
+			</label>
+			<div class="row2">
+				<label class="color-row"
+					>{m['filament.fields.colorHex']()}
+					<input
+						type="color"
+						value={el.color}
+						onchange={(e) => update({ color: e.currentTarget.value })}
+					/></label
+				>
+				<label class="check"
+					><input
+						type="checkbox"
+						checked={el.dashed}
+						onchange={(e) => update({ dashed: e.currentTarget.checked })}
+					/>
+					{m['labels.dashed']()}</label
+				>
+			</div>
 		{:else if el.type === 'swatch'}
 			<div class="row2">
 				<label
